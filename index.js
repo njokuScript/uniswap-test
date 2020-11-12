@@ -1,66 +1,84 @@
-const Web3 = require('web3');
-const web3 = new Web3("HTTP://127.0.0.1:8545");
-const { ChainId, Fetcher, WETH, Route, Trade, Token, TokenAmount, TradeType, Percent } = require('@uniswap/sdk')
-const Uniswap = require('./uniswap.json');
 
+const { BigintIsh, ChainId, Fetcher, WETH, Route, Trade, Token, TokenAmount, TradeType, Percent } = require('@uniswap/sdk')
+const {ethers} = require('ethers');
 
-const run = async () => {
-
-//chain id 
-const chainId = ChainId.MAINNET;
-
-// dai token address
 const tokenAddress = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
 
-// token decimals
-const decimals = 18;
+const PRIVATE_KEY = '0x20fcf0f14933bc2776ae189fa92c165976f840038e2fcf8c63c6708bf9e168c6'
 
-// new dai object
-const DAI = new Token(chainId, tokenAddress, decimals);
+const chainId = ChainId.MAINNET;
 
-//get pair data for uniswap and WETH
-const pair = await Fetcher.fetchPairData(DAI, WETH[DAI.chainId]);
+const init = async () => {
 
-console.log('pair', pair);
+  try {
 
-//trade route
-const route = new Route([pair], WETH[DAI.chainId])
+    const dai = await Fetcher.fetchTokenData(chainId, tokenAddress);
 
-/* global BigInt */
- const amountIn = BigInt(100000000000000000) // 1 WETH
+    const weth = WETH[chainId];
+    
+    const pair = await Fetcher.fetchPairData(dai, weth);
+    
+    const route = new Route([pair], weth);
+    
+    const trade = new Trade(route, new TokenAmount(weth, '100000000000000000'), TradeType.EXACT_INPUT);
+    
+    console.log(route.midPrice.toSignificant(6));
+    
+    console.log(route.midPrice.invert().toSignificant(6));
+    
+    console.log(trade.executionPrice.toSignificant(6));
+    console.log(trade)
+    console.log(trade.nextMidPrice.toSignificant(6));
+  
+     const slippageTolerance = new Percent(50, 10000);
+    
+   // const amountOutMin = trade.minimumAmountOut.raw;
+  
+    const amountOutMin = trade.outputAmount.raw;
+    
+    const path = [weth.address, dai.address];
+    
+    const to = '0x2750a4156eA4eA2D4240B256802efe94A41B3924';
+    
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+    
+    const value = trade.inputAmount.raw;
+  
+    const url = 'https://eth-mainnet.alchemyapi.io/v2/2gdCD03uyFCNKcyEryqJiaPNtOGdsNLv' 
 
-   // new trade object
-   const trade = new Trade(route, new TokenAmount(WETH[DAI.chainId], amountIn), TradeType.EXACT_INPUT)
+    const provider = new ethers.providers.JsonRpcProvider(url);    
+  
+    const signer = new ethers.Wallet(PRIVATE_KEY);
+    const account = signer.connect(provider);
+    const uniswap = new ethers.Contract(
+      '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+      ['function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)'],
+      account
+    );
+  
+    console.log("amount out", amountOutMin, )
+    console.log("path", path)
+    console.log("to", to)
+    console.log("deadline", deadline);
+    console.log("value", value);
+    const tx = await uniswap.swapExactETHForTokens(
+      amountOutMin,
+      path,
+      to,
+      deadline,
+      { value, gasPrice: 20e9 }
+    );
+    console.log(`Transaction hash: ${tx.hash}`);
+  
+    const receipt = await tx.wait();
+    console.log(`Transaction was mined in block ${receipt.blockNumber}`);
 
-   console.log( "trade object", trade);
-   
-   const slippageTolerance = new Percent('50', '10000') // 50 bips, or 0.50%
+  }catch(err){
+    console.log(err)
+  }
 
-   const amountOutMin = trade.minimumAmountOut(slippageTolerance) // needs to be converted to e.g. hex
-
-   console.log("slippage tolerance", amountOutMin)
-
-   const path = [WETH[DAI.chainId].address, DAI.address]
-
-   const to = '0x8d1d225ACcD96774963d47c108F097392C5f1ebC';
-
-   const deadline = Math.floor(Date.now() / 1000) + 60 * 20 // 20 minutes from the current time
-
-
-   console.log(route.midPrice.toSignificant(6));
-   console.log(route.midPrice.invert().toSignificant(6));
-   console.log(trade.executionPrice.toSignificant(6));
-   console.log(trade.nextMidPrice.toSignificant(6));
-
-   const value = trade.inputAmount.raw
-   
-   const uniswap = new web3.eth.Contract(Uniswap.abi, '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',)
-
-   const transaction = await uniswap.methods.swapExactETHForTokens(amountOutMin, path, to, deadline).send({ from: '0x8d1d225ACcD96774963d47c108F097392C5f1ebC', value: value})
-
-
-   console.log(transaction, "transaction receipt object");
-
+ 
 }
 
-run();
+
+init();
