@@ -13,6 +13,7 @@
     "@ethersproject/providers": "5.0.0",
     "@ethersproject/solidity": "5.0.0",
     "@uniswap/sdk": "^3.0.3",
+    "bignumber.js": "^9.0.1",
     "ethers": "^5.0.0-beta.192",
     "global": "^4.4.0",
     "nodemon": "^2.0.6",
